@@ -1,0 +1,72 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Report</title>
+    <link rel="stylesheet" href="/static/style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <a href="/dashboard" class="logout-btn">Back</a>
+
+    <div class="header">
+      <h1>VIDYA VATIKA PUBLIC SCHOOL</h1>
+      <p>Attendance Report</p>
+    </div>
+
+    <!-- 📊 CHART -->
+    <canvas id="myChart" width="400" height="200"></canvas>
+
+    <!-- 📋 TABLE -->
+    <table border="1" align="center" cellpadding="10" style="margin-top: 20px">
+      <tr>
+        <th>Name</th>
+        <th>Present</th>
+        <th>Absent</th>
+      </tr>
+
+      {% for name, data in report.items() %}
+      <tr>
+        <td>{{ name }}</td>
+        <td>{{ data.present }}</td>
+        <td>{{ data.absent }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+
+    <br />
+
+    <div style="text-align: center">
+      <a href="/download">
+        <button class="submit-btn">Download Excel</button>
+      </a>
+    </div>
+
+    <script>
+      const labels = [{% for name in report.keys() %}"{{ name }}",{% endfor %}];
+
+      const presentData = [{% for data in report.values() %}{{ data.present }},{% endfor %}];
+      const absentData = [{% for data in report.values() %}{{ data.absent }},{% endfor %}];
+
+      const ctx = document.getElementById('myChart');
+
+      new Chart(ctx, {
+          type: 'bar',
+          data: {
+              labels: labels,
+              datasets: [
+                  {
+                      label: 'Present',
+                      data: presentData,
+                      backgroundColor: 'green'
+                  },
+                  {
+                      label: 'Absent',
+                      data: absentData,
+                      backgroundColor: 'red'
+                  }
+              ]
+          }
+      });
+    </script>
+  </body>
+</html>
