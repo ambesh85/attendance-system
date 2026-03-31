@@ -1,43 +1,28 @@
 from flask import Flask, render_template, request, redirect, session, send_file
-import csv
+from db import get_db
 from datetime import datetime
-from collections import defaultdict
-import io
-import os
+import csv
 
 app = Flask(__name__)
 app.secret_key = "secret123"
 
 
-# 🔹 Load students
-def load_students():
-    students = []
-    with open("students.csv", newline="") as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            students.append(row)
-    return students
-
-
-# 🔹 Check user
-def check_user(username, password):
-    with open("users.csv", newline="") as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            if row["username"] == username and row["password"] == password:
-                return True
-    return False
-
-
-# 🔐 Login
+# 🔐 LOGIN
 @app.route("/", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
         user = request.form["username"]
         pwd = request.form["password"]
 
-        if check_user(user, pwd):
-            session["user"] = user
+        db = get_db()
+
+        user_data = db.execute(
+            "SELECT * FROM users WHERE username=? AND password=?", (user, pwd)
+        ).fetchone()
+
+        if user_data:
+            session["user"] = user_data["username"]
+            session["class"] = user_data["class"]
             return redirect("/dashboard")
         else:
             return "❌ Invalid Credentials"
@@ -45,139 +30,135 @@ def login():
     return render_template("login.html")
 
 
-# 🏠 Dashboard
-@app.route("/dashboard")
+# 🏠 DASHBOARD
+@app.route("/dashboard", methods=["GET", "POST"])
 def dashboard():
     if "user" not in session:
         return redirect("/")
 
-    students = load_students()
-    total = len(students)
+    db = get_db()
+    teacher_class = session.get("class")
 
-    return render_template("index.html", students=students, total=total)
+    if teacher_class == "all":
+        selected_class = request.form.get("class")
+    else:
+        selected_class = teacher_class
+
+    if selected_class:
+        students = db.execute(
+            "SELECT * FROM students WHERE class=?", (selected_class,)
+        ).fetchall()
+    else:
+        students = []
+
+    return render_template(
+        "index.html",
+        students=students,
+        total=len(students),
+        selected_class=selected_class,
+        teacher_class=teacher_class,
+    )
 
 
-# 📥 Submit Attendance (FIXED)
+# 📥 SUBMIT (DEFAULT PRESENT)
 @app.route("/submit", methods=["POST"])
 def submit():
     if "user" not in session:
         return redirect("/")
 
-    students = load_students()
+    db = get_db()
+    teacher_class = session.get("class")
+
+    if teacher_class == "all":
+        selected_class = request.form.get("class")
+    else:
+        selected_class = teacher_class
+
+    students = db.execute(
+        "SELECT * FROM students WHERE class=?", (selected_class,)
+    ).fetchall()
+
     date = datetime.now().strftime("%Y-%m-%d")
+    absent_list = request.form.getlist("absent")
 
-    file_exists = os.path.isfile("attendance.csv")
+    for student in students:
+        roll = str(student["roll"])
+        status = "Absent" if roll in absent_list else "Present"
 
-    absentees = []
+        db.execute(
+            "INSERT INTO attendance (date, roll, name, status, class) VALUES (?, ?, ?, ?, ?)",
+            (date, roll, student["name"], status, selected_class),
+        )
 
-    with open("attendance.csv", "a", newline="") as file:
-        writer = csv.writer(file)
-
-        # ✅ Write header if file is new or empty
-        if not file_exists or os.stat("attendance.csv").st_size == 0:
-            writer.writerow(["date", "roll", "name", "status"])
-
-        for student in students:
-            roll = student["roll"]
-            status = request.form.get(roll)
-
-            writer.writerow([date, roll, student["name"], status])
-
-            if status == "Absent":
-                absentees.append(student)
-
-    for student in absentees:
-        print(f"{student['name']} is absent. Notify: {student['parent_phone']}")
-
+    db.commit()
     return redirect("/success")
 
 
-# ✅ Success
-@app.route("/success")
-def success():
-    if "user" not in session:
-        return redirect("/")
-    return render_template("success.html")
-
-
-# 📊 Report (SAFE VERSION)
+# 📊 REPORT WITH GROUPING
 @app.route("/report")
 def report():
     if "user" not in session:
         return redirect("/")
 
-    report_data = defaultdict(lambda: {"present": 0, "absent": 0})
+    db = get_db()
 
-    try:
-        with open("attendance.csv", newline="") as file:
-            reader = csv.DictReader(file)
-            for row in reader:
-                name = row.get("name")
-                status = row.get("status", "Absent")  # ✅ SAFE
+    rows = db.execute("SELECT name, status FROM attendance").fetchall()
 
-                if not name:
-                    continue
+    report_data = {}
 
-                if status == "Present":
-                    report_data[name]["present"] += 1
-                else:
-                    report_data[name]["absent"] += 1
-    except FileNotFoundError:
-        pass
+    for row in rows:
+        name = row["name"]
+        status = row["status"]
+
+        if name not in report_data:
+            report_data[name] = {"present": 0, "absent": 0}
+
+        if status == "Present":
+            report_data[name]["present"] += 1
+        else:
+            report_data[name]["absent"] += 1
+
+    print(report_data)  # 🔥 DEBUG (check terminal)
 
     return render_template("report.html", report=report_data)
 
 
-# 📥 Download CSV
+# 📥 DOWNLOAD CSV
 @app.route("/download")
 def download():
     if "user" not in session:
         return redirect("/")
 
-    output = io.StringIO()
-    writer = csv.writer(output)
+    db = get_db()
+    rows = db.execute("SELECT * FROM attendance").fetchall()
 
-    writer.writerow(["Name", "Present", "Absent"])
+    filename = "attendance_report.csv"
 
-    report_data = defaultdict(lambda: {"present": 0, "absent": 0})
+    with open(filename, "w", newline="") as file:
+        writer = csv.writer(file)
+        writer.writerow(["Date", "Roll", "Name", "Status", "Class"])
 
-    try:
-        with open("attendance.csv", newline="") as file:
-            reader = csv.DictReader(file)
-            for row in reader:
-                name = row.get("name")
-                status = row.get("status", "Absent")
+        for row in rows:
+            writer.writerow(
+                [row["date"], row["roll"], row["name"], row["status"], row["class"]]
+            )
 
-                if not name:
-                    continue
-
-                if status == "Present":
-                    report_data[name]["present"] += 1
-                else:
-                    report_data[name]["absent"] += 1
-    except FileNotFoundError:
-        pass
-
-    for name, data in report_data.items():
-        writer.writerow([name, data["present"], data["absent"]])
-
-    output.seek(0)
-
-    return send_file(
-        io.BytesIO(output.getvalue().encode()),
-        mimetype="text/csv",
-        as_attachment=True,
-        download_name="attendance_report.csv",
-    )
+    return send_file(filename, as_attachment=True)
 
 
-# 🚪 Logout
+# ✅ SUCCESS
+@app.route("/success")
+def success():
+    return render_template("success.html")
+
+
+# 🚪 LOGOUT
 @app.route("/logout")
 def logout():
-    session.pop("user", None)
+    session.clear()
     return redirect("/")
 
 
-# 🚀 Run
+# 🚀 RUN
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run(debug=True)

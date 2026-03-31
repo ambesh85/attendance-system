@@ -5,54 +5,83 @@
     <link rel="stylesheet" href="/static/style.css" />
   </head>
   <body>
-    <!-- 🔴 Logout -->
     <a href="/logout" class="logout-btn">Logout</a>
 
-    <!-- 🏫 HEADER -->
     <div class="header">
       <h1>VIDYA VATIKA PUBLIC SCHOOL</h1>
       <p>Student Attendance System</p>
     </div>
 
-    <!-- 👤 Welcome -->
     <h3 class="welcome">Welcome, {{ session['user'] }}</h3>
 
-    <!-- 📊 Actions -->
-    <div class="top-actions">
+    <!-- 🔥 ADMIN CLASS SELECT -->
+    {% if teacher_class == "all" %}
+    <div style="text-align: center; margin: 20px">
+      <form method="post" action="/dashboard">
+        <select name="class" required>
+          <option value="">Select Class</option>
+          {% for i in range(1,11) %}
+          <option value="{{ i }}">Class {{ i }}</option>
+          {% endfor %}
+        </select>
+        <button class="submit-btn">Load Students</button>
+      </form>
+    </div>
+    {% else %}
+    <h2 style="text-align: center; color: green">Class {{ teacher_class }}</h2>
+    {% endif %}
+
+    <!-- 🔥 REPORT BUTTON -->
+    <div style="text-align: center; margin: 15px">
       <a href="/report">
         <button class="submit-btn">View Report</button>
       </a>
     </div>
 
-    <!-- 📊 Stats -->
+    <!-- 🔥 STATS -->
     <div class="stats">
       <div class="box">Total Students: {{ total }}</div>
     </div>
 
-    <!-- 📋 FORM -->
-    <form action="/submit" method="post">
-      {% for student in students %}
+    <!-- 🔥 ATTENDANCE FORM -->
+    <form action="/submit" method="post" onsubmit="return validateForm();">
+      <input type="hidden" name="class" value="{{ selected_class }}" />
+
+      {% if students %} {% for student in students %}
       <div class="card">
         <b>{{ student.name }}</b><br /><br />
 
-        <label>
-          <input
-            type="radio"
-            name="{{ student.roll }}"
-            value="Present"
-            required
-          />
-          Present
-        </label>
+        <!-- DEFAULT PRESENT -->
+        <input type="hidden" name="{{ student.roll }}" value="Present" />
 
-        <label style="margin-left: 20px">
-          <input type="radio" name="{{ student.roll }}" value="Absent" />
-          Absent
+        <label class="absent-label">
+          <input type="checkbox" name="absent" value="{{ student.roll }}" />
+          Mark Absent
         </label>
       </div>
       {% endfor %}
 
       <button class="submit-btn">Submit Attendance</button>
+
+      {% else %}
+
+      <p style="text-align: center; color: red">
+        No students found. Select a class.
+      </p>
+
+      {% endif %}
     </form>
+
+    <!-- 🔥 VALIDATION -->
+    <script>
+      function validateForm() {
+          const total = {{ total }};
+          if (total === 0) {
+              alert("Please select a class first!");
+              return false;
+          }
+          return true;
+      }
+    </script>
   </body>
 </html>
