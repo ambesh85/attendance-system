@@ -2,6 +2,26 @@ body {
   font-family: Arial;
   margin: 0;
   background: #f4f6f9;
+  position: relative;
+}
+
+/* 🔥 RESPONSIVE WATERMARK LOGO (CLEAR & PROFESSIONAL) */
+body::before {
+  content: "";
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 60vw;
+  height: 60vw;
+  max-width: 700px;
+  max-height: 700px;
+  background: url("/static/logo.png") no-repeat center;
+  background-size: contain;
+  opacity: 0.1; /* 🔥 more visible */
+  filter: contrast(120%); /* 🔥 sharper look */
+  transform: translate(-50%, -50%);
+  z-index: -1;
+  pointer-events: none;
 }
 
 /* 🔵 Header */

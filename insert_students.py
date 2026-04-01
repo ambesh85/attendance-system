@@ -3,15 +3,24 @@ from db import get_db
 
 db = get_db()
 
-with open("students.csv", newline="", encoding="utf-8") as file:
+# CLEAR OLD DATA
+db.execute("DELETE FROM students")
+
+with open("attendance_all_classes.csv", newline="", encoding="utf-8") as file:
     reader = csv.DictReader(file)
 
     count = 0
 
     for row in reader:
+        # 🔥 SAFE CLASS CONVERSION
+        try:
+            student_class = int(float(row["class"])) if row["class"] else None
+        except:
+            continue  # skip bad rows
+
         db.execute(
             "INSERT INTO students (roll, name, parent_phone, class) VALUES (?, ?, ?, ?)",
-            (row["roll"], row["name"], row["parent_phone"], row["class"]),
+            (row["roll"], row["name"], "", student_class),
         )
         count += 1
 
