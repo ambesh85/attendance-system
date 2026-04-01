@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, session, send_file
 from db import get_db
 from datetime import datetime
 import csv
+import os
 
 app = Flask(__name__)
 app.secret_key = "secret123"
@@ -46,7 +47,8 @@ def dashboard():
 
     if selected_class:
         students = db.execute(
-            "SELECT * FROM students WHERE class=?", (selected_class,)
+            "SELECT * FROM students WHERE CAST(class AS INTEGER)=?",
+            (int(selected_class),),
         ).fetchall()
     else:
         students = []
@@ -60,7 +62,7 @@ def dashboard():
     )
 
 
-# 📥 SUBMIT (DEFAULT PRESENT)
+# 📥 SUBMIT ATTENDANCE
 @app.route("/submit", methods=["POST"])
 def submit():
     if "user" not in session:
@@ -75,7 +77,7 @@ def submit():
         selected_class = teacher_class
 
     students = db.execute(
-        "SELECT * FROM students WHERE class=?", (selected_class,)
+        "SELECT * FROM students WHERE CAST(class AS INTEGER)=?", (int(selected_class),)
     ).fetchall()
 
     date = datetime.now().strftime("%Y-%m-%d")
@@ -94,43 +96,68 @@ def submit():
     return redirect("/success")
 
 
-# 📊 REPORT WITH GROUPING
-@app.route("/report")
+# 📊 DATE-WISE REPORT (ROLE-BASED)
+@app.route("/report", methods=["GET", "POST"])
 def report():
     if "user" not in session:
         return redirect("/")
 
     db = get_db()
+    teacher_class = session.get("class")
 
-    rows = db.execute("SELECT name, status FROM attendance").fetchall()
+    selected_date = request.form.get("date")
 
+    query = "SELECT * FROM attendance WHERE 1=1"
+    params = []
+
+    # 📅 Date filter
+    if selected_date:
+        query += " AND date=?"
+        params.append(selected_date)
+
+    # 🎯 Role-based filter
+    if teacher_class != "all":
+        query += " AND CAST(class AS INTEGER)=?"
+        params.append(int(teacher_class))
+
+    query += " ORDER BY date DESC"
+
+    rows = db.execute(query, params).fetchall()
+
+    # 🔥 Group by date
     report_data = {}
 
     for row in rows:
-        name = row["name"]
-        status = row["status"]
+        date = row["date"]
 
-        if name not in report_data:
-            report_data[name] = {"present": 0, "absent": 0}
+        if date not in report_data:
+            report_data[date] = []
 
-        if status == "Present":
-            report_data[name]["present"] += 1
-        else:
-            report_data[name]["absent"] += 1
-
-    print(report_data)  # 🔥 DEBUG (check terminal)
+        report_data[date].append(
+            {"roll": row["roll"], "name": row["name"], "status": row["status"]}
+        )
 
     return render_template("report.html", report=report_data)
 
 
-# 📥 DOWNLOAD CSV
+# 📥 DOWNLOAD CSV (ROLE-BASED)
 @app.route("/download")
 def download():
     if "user" not in session:
         return redirect("/")
 
     db = get_db()
-    rows = db.execute("SELECT * FROM attendance").fetchall()
+    teacher_class = session.get("class")
+
+    query = "SELECT * FROM attendance WHERE 1=1"
+    params = []
+
+    # 🎯 Role-based filter
+    if teacher_class != "all":
+        query += " AND CAST(class AS INTEGER)=?"
+        params.append(int(teacher_class))
+
+    rows = db.execute(query, params).fetchall()
 
     filename = "attendance_report.csv"
 
@@ -160,8 +187,6 @@ def logout():
 
 
 # 🚀 RUN
-import os
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)

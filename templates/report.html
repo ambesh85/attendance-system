@@ -1,55 +1,115 @@
 <!doctype html>
 <html>
   <head>
-    <title>Report</title>
+    <title>Attendance Report</title>
     <link rel="stylesheet" href="/static/style.css" />
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
+
   <body>
-    <a href="/dashboard">Back</a>
+    <a href="/dashboard" style="margin: 20px; display: inline-block">⬅ Back</a>
 
-    <h2 style="text-align: center">Attendance Report</h2>
+    <h2 style="text-align: center">📊 Attendance Report</h2>
 
-    <canvas id="myChart"></canvas>
+    <!-- 📅 FILTER -->
+    <form method="POST" style="text-align: center; margin: 20px">
+      <input type="date" name="date" />
+      <button type="submit">Filter</button>
+    </form>
 
-    <table border="1" style="margin: auto">
-      <tr>
+    <!-- 📊 CHART -->
+    <div style="width: 80%; margin: auto">
+      <canvas id="myChart"></canvas>
+    </div>
+
+    <br />
+
+    <!-- 📅 DATE-WISE TABLE -->
+    {% for date, students in report.items() %}
+    <h3 style="text-align: center">📅 {{ date }}</h3>
+
+    <table
+      border="1"
+      style="margin: auto; border-collapse: collapse; width: 80%"
+    >
+      <tr style="background: #2a5298; color: white">
+        <th>Roll</th>
         <th>Name</th>
-        <th>Present</th>
-        <th>Absent</th>
+        <th>Status</th>
       </tr>
 
-      {% for name, data in report.items() %}
+      {% for s in students %}
       <tr>
-        <td>{{ name }}</td>
-        <td>{{ data.present }}</td>
-        <td>{{ data.absent }}</td>
+        <td>{{ s.roll }}</td>
+        <td>{{ s.name }}</td>
+        <td
+          style="color: {% if s.status == 'Absent' %}red{% else %}green{% endif %}; font-weight:bold;"
+        >
+          {{ s.status }}
+        </td>
       </tr>
       {% endfor %}
     </table>
 
+    <!-- 🔥 SUMMARY -->
+    <p style="text-align: center">
+      Present: {{ students | selectattr('status', 'equalto', 'Present') | list |
+      length }} | Absent: {{ students | selectattr('status', 'equalto',
+      'Absent') | list | length }}
+    </p>
+
+    <br /><br />
+    {% endfor %}
+
+    <!-- 📊 CHART SCRIPT -->
     <script>
-      const labels = [{% for name in report.keys() %}"{{ name }}",{% endfor %}];
-      const presentData = [{% for data in report.values() %}{{ data.present }},{% endfor %}];
-      const absentData = [{% for data in report.values() %}{{ data.absent }},{% endfor %}];
+      const labels = [];
+      const presentData = [];
+      const absentData = [];
+
+      {% for date, students in report.items() %}
+        labels.push("{{ date }}");
+
+        let present = 0;
+        let absent = 0;
+
+        {% for s in students %}
+          {% if s.status == "Present" %}
+            present++;
+          {% else %}
+            absent++;
+          {% endif %}
+        {% endfor %}
+
+        presentData.push(present);
+        absentData.push(absent);
+      {% endfor %}
 
       new Chart(document.getElementById("myChart"), {
-          type: "bar",
-          data: {
-              labels: labels,
-              datasets: [
-                  {
-                      label: "Present",
-                      data: presentData,
-                      backgroundColor: "green"
-                  },
-                  {
-                      label: "Absent",
-                      data: absentData,
-                      backgroundColor: "red"
-                  }
-              ]
+        type: "bar",
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: "Present",
+              data: presentData,
+              backgroundColor: "green"
+            },
+            {
+              label: "Absent",
+              data: absentData,
+              backgroundColor: "red"
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: {
+              position: "top"
+            }
           }
+        }
       });
     </script>
   </body>
